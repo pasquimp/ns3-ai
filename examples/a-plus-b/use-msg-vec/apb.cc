@@ -25,7 +25,7 @@
 #include <iostream>
 #include <random>
 
-#define NUM_ENV 10000
+#define NUM_ENV 100
 #define APB_SIZE 3
 
 using namespace ns3;
@@ -43,6 +43,8 @@ main()
     // Should run after Python
     assert(msgInterface->GetCpp2PyVector()->size() == APB_SIZE);
 
+    int dim = msgInterface->GetCpp2PyVector()->size();
+
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     std::mt19937 gen(seed);
     std::uniform_int_distribution<int> distrib(1, 10);
@@ -51,13 +53,20 @@ main()
     {
         msgInterface->CppSendBegin();
         std::cout << "set: ";
-        for (int j = 0; j < APB_SIZE; ++j)
+
+        // we save the reward as the values associated with the first status
+        uint32_t reward = distrib (gen);
+        std::cout << "[ns-3] reward: " << reward << std::endl;
+        msgInterface->GetCpp2PyVector()->at(0).env_b = reward;
+
+        for (int j = 0; j < dim; ++j)
         {
             uint32_t temp_a = distrib(gen);
-            uint32_t temp_b = distrib(gen);
-            std::cout << temp_a << "," << temp_b << ";";
+            //uint32_t temp_b = distrib(gen);
+            //std::cout << temp_a << "," << temp_b << ";";
+            std::cout << temp_a << ";";
             msgInterface->GetCpp2PyVector()->at(j).env_a = temp_a;
-            msgInterface->GetCpp2PyVector()->at(j).env_b = temp_b;
+            //msgInterface->GetCpp2PyVector()->at(j).env_b = temp_b;
         }
         std::cout << "\n";
         msgInterface->CppSendEnd();

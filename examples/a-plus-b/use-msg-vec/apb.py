@@ -21,11 +21,29 @@ from ns3ai_utils import Experiment
 import sys
 import traceback
 
+from tensorforce import Agent
+import numpy as np
+
 APB_SIZE = 3
 
-exp = Experiment("ns3ai_apb_msg_vec", "../../../../../", py_binding,
+exp = Experiment("cloudnet  --cwd=scratch/cloudnet/cfg -- --Prefix=example", "../../../../../", py_binding,
                  handleFinish=True, useVector=True, vectorSize=APB_SIZE)
 msgInterface = exp.run(show_output=True)
+
+# Instantiate a Tensorforce agent
+agent = Agent.create(
+            agent='tensorforce',
+            states=dict(type='float', shape=(APB_SIZE,)),
+            actions=dict(type='int', shape=(APB_SIZE,), num_values=3),
+            #environment=environment  # alternatively: states, actions, (max_episode_timesteps)
+            memory=10000,
+            update=dict(unit='timesteps', batch_size=64),
+            optimizer=dict(type='adam', learning_rate=3e-4),
+            policy=dict(network='auto'),
+            objective='policy_gradient',
+            reward_estimation=dict(horizon=20)
+        )
+
 
 try:
     while True:
@@ -36,9 +54,32 @@ try:
 
         # send to C++ side
         msgInterface.PySendBegin()
+
+        # the agent expects the state as numpy array
+        status = np.empty ([APB_SIZE])
+        # we read the reward
+        reward = msgInterface.GetCpp2PyVector()[0].b
+
+        for i in range(len(msgInterface.GetCpp2PyVector())):
+            status [i] = msgInterface.GetCpp2PyVector()[i].a
+        print ("[Agent, status (get]:", end = ' ')
+        print (status)
+        print ("[Agent, reward (get)]:", end = ' ')
+        print (reward)
+        #for i in range(len(msgInterface.GetCpp2PyVector())):
+            # calculate the sums
+        #    msgInterface.GetPy2CppVector()[i].c = msgInterface.GetCpp2PyVector()[i].a # + msgInterface.GetCpp2PyVector()[i].b
+
+        # AI algorithms here and put the data back to the action
+        actions = agent.act(states=status, independent=False)
+        agent.observe(terminal=False, reward=reward)
+        print ("[Agent, actions (set)]:", end = ' ')
+        print (actions)
+
         for i in range(len(msgInterface.GetCpp2PyVector())):
             # calculate the sums
-            msgInterface.GetPy2CppVector()[i].c = msgInterface.GetCpp2PyVector()[i].a + msgInterface.GetCpp2PyVector()[i].b
+            msgInterface.GetPy2CppVector()[i].c = actions [i] # + msgInterface.GetCpp2PyVector()[i].b
+
         msgInterface.PyRecvEnd()
         msgInterface.PySendEnd()
 
